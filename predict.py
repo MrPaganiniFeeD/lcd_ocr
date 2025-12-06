@@ -77,11 +77,11 @@ def detect_temperature_single(image_path: Path, yolo_model: YOLO, class_model: R
     out_value_str = ''
     is_node = False
     for center, name in centers_and_names:
-        if name == 'node' and is_node:
+        if name == 'dot' and is_node:
             continue
         if name == 'c':
             continue
-        if name == 'node' and not is_node:
+        if name == 'dot' and not is_node:
             is_node = True
         out_value_str += name
 
