@@ -81,7 +81,10 @@ def detect_temperature_single(image_path: Path, yolo_model: YOLO, class_model: R
             continue
         if name == 'dot' and not is_node:
             is_node = True
-        out_value_str += "."
+            out_value_str += "."
+            continue
+        out_value_str += name
+        
 
     out_value = None
     try:
