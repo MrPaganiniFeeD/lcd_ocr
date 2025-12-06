@@ -33,7 +33,6 @@ def detect_temperature_single(image_path: Path, yolo_model: YOLO, class_model: R
     - возвращает (temperature_or_None, detections_list, annotated_image_array)
     detections_list: list of dicts {'class_id': int, 'class_name': str, 'conf': float, 'bbox': [x1,y1,x2,y2]}
     """
-    # Предсказание класса (для поворота) -- ваш класс ожидает путь
     try:
         class_pred = class_model.predict(str(image_path))["pred"]
     except Exception as e:
@@ -43,10 +42,9 @@ def detect_temperature_single(image_path: Path, yolo_model: YOLO, class_model: R
     image = Image.open(image_path)
     image = ImageOps.exif_transpose(image)
     if class_pred == 1:
-        # как в вашем коде — поворот на -180 если предсказали 1
         image = image.rotate(-180)
 
-    results = yolo_model.predict(image, iou=iou)  # список результатов (обычно len==1)
+    results = yolo_model.predict(image, iou=iou)
     if len(results) == 0:
         return None, [], np.array(image)
 
@@ -83,7 +81,7 @@ def detect_temperature_single(image_path: Path, yolo_model: YOLO, class_model: R
             continue
         if name == 'dot' and not is_node:
             is_node = True
-        out_value_str += name
+        out_value_str += "."
 
     out_value = None
     try:
