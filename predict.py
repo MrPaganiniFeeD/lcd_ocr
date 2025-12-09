@@ -22,7 +22,7 @@ def parse_args():
     p.add_argument('--outdir', required=True, help='Папка для сохранения разметки и результатов')
     p.add_argument('--yolo', default=r"weight\verb_224_epoch15.pt", help='Путь до .pt модели YOLO (Ultralytics)')
     p.add_argument('--class_resnet', dest='resnet_class_model', default=r"weight\best_lcd_resnet183.pth", help='Путь до модели классификатора (ResNetPredictor)')
-    p.add_argument('--class_yolo', dest='yolo_class_model', default=r"weight\epoch25.pt", help='Путь до модели классификатора (YOLO)')
+    p.add_argument('--class_yolo', dest='yolo_class_model', default=r"weight\class_yolo_epoch25.pt", help='Путь до модели классификатора (YOLO)')
     p.add_argument('--class_is_yolo', required=True, help='True or False')
     p.add_argument('--iou', type=float, default=0.3, help='IOU для предсказаний YOLO (default 0.3)')
     return p.parse_args()
