@@ -20,13 +20,15 @@ def parse_args():
     p = argparse.ArgumentParser(description="Batch detect + save annotated images and results")
     p.add_argument('--indir', required=True, help='Папка с изображениями (будут обработаны рекурсивно)')
     p.add_argument('--outdir', required=True, help='Папка для сохранения разметки и результатов')
-    p.add_argument('--yolo', default=r"weight\epoch5_verb_aug.pt", help='Путь до .pt модели YOLO (Ultralytics)')
-    p.add_argument('--class', dest='class_model', default=r"weight\best_lcd_resnet183.pth", help='Путь до модели классификатора (ResNetPredictor)')
+    p.add_argument('--yolo', default=r"weight\verb_224_epoch15.pt", help='Путь до .pt модели YOLO (Ultralytics)')
+    p.add_argument('--class_resnet', dest='resnet_class_model', default=r"weight\best_lcd_resnet183.pth", help='Путь до модели классификатора (ResNetPredictor)')
+    p.add_argument('--class_yolo', dest='yolo_class_model', default=r"weight\epoch25.pt", help='Путь до модели классификатора (YOLO)')
+    p.add_argument('--class_is_yolo', required=True, help='True or False')
     p.add_argument('--iou', type=float, default=0.3, help='IOU для предсказаний YOLO (default 0.3)')
     return p.parse_args()
 
 
-def detect_temperature_single(image_path: Path, yolo_model: YOLO, class_model: ResNetPredictor, iou: float=0.3):
+def detect_temperature_single(image_path: Path, yolo_detect_model: YOLO, class_model: ResNetPredictor, yolo_class_model, yolo_class_flag: bool ,iou: float=0.3):
     """
     - применяет классификатор для поворота
     - запускает детекцию
@@ -34,7 +36,15 @@ def detect_temperature_single(image_path: Path, yolo_model: YOLO, class_model: R
     detections_list: list of dicts {'class_id': int, 'class_name': str, 'conf': float, 'bbox': [x1,y1,x2,y2]}
     """
     try:
-        class_pred = class_model.predict(str(image_path))["pred"]
+        if yolo_class_flag == False:
+            class_pred = class_model.predict(str(image_path))["pred"]
+        else:
+            results = yolo_class_model(str(image_path), verbose=False)
+            class_pred = results[0].probs.top1  # 0 или 1
+            if class_pred == 0:
+                class_pred = 1
+            else:
+                class_pred = 0
     except Exception as e:
         print(f"[WARN] Ошибка классификатора для {image_path}: {e}")
         class_pred = None
@@ -44,7 +54,7 @@ def detect_temperature_single(image_path: Path, yolo_model: YOLO, class_model: R
     if class_pred == 1:
         image = image.rotate(-180)
 
-    results = yolo_model.predict(image, iou=iou)
+    results = yolo_detect_model.predict(image, iou=iou)
     if len(results) == 0:
         return None, [], np.array(image)
 
@@ -110,7 +120,9 @@ def main():
     indir = Path(args.indir)
     outdir = Path(args.outdir)
     yolo_path = args.yolo
-    class_path = args.class_model
+    class_resnet_path = args.resnet_class_model
+    yolo_class_path = args.yolo_class_model
+    class_is_yolo = args.class_is_yolo
 
     if not indir.exists():
         print("indir не существует:", indir)
@@ -124,7 +136,8 @@ def main():
 
     print("Загружаем модели...")
     yolo_model = YOLO(yolo_path)
-    class_model = ResNetPredictor(class_path)
+    class_model = ResNetPredictor(class_resnet_path)
+    yolo_class_model = YOLO(yolo_class_path)
 
     csv_path = outdir / 'results.csv'
     csv_file = open(csv_path, 'w', newline='', encoding='utf-8')
@@ -139,7 +152,7 @@ def main():
 
         print(f"-> {img_path} ...", end=' ')
         try:
-            temp, detections, annotated_np = detect_temperature_single(img_path, yolo_model, class_model, iou=args.iou)
+            temp, detections, annotated_np = detect_temperature_single(img_path, yolo_model, class_model, yolo_class_model, class_is_yolo, iou=args.iou)
 
             try:
                 annotated_img = Image.fromarray(annotated_np)
