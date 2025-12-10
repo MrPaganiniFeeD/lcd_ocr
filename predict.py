@@ -100,6 +100,7 @@ def detect_temperature_single(image_path: Path, yolo_detect_model: YOLO, class_m
     try:
         if out_value_str != '':
             out_value = float(out_value_str)
+
     except ValueError:
         out_value = None
 
@@ -107,6 +108,9 @@ def detect_temperature_single(image_path: Path, yolo_detect_model: YOLO, class_m
         annotated = result.plot()  # numpy array (H,W,3)
     except Exception:
         annotated = np.array(image)
+
+    if (out_value != None) and (out_value > 30):
+        out_value = None
 
     return out_value, out_detection, annotated
 
