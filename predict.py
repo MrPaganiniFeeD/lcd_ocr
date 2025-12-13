@@ -20,15 +20,24 @@ def parse_args():
     p = argparse.ArgumentParser(description="Batch detect + save annotated images and results")
     p.add_argument('--indir', required=True, help='Папка с изображениями (будут обработаны рекурсивно)')
     p.add_argument('--outdir', required=True, help='Папка для сохранения разметки и результатов')
-    p.add_argument('--yolo', default=r"weight\verb_224_epoch15.pt", help='Путь до .pt модели YOLO (Ultralytics)')
+    p.add_argument('--yolo', default=r"weight\super_big\epoch20.pt", help='Путь до .pt модели YOLO (Ultralytics)')
     p.add_argument('--class_resnet', dest='resnet_class_model', default=r"weight\best_lcd_resnet183.pth", help='Путь до модели классификатора (ResNetPredictor)')
     p.add_argument('--class_yolo', dest='yolo_class_model', default=r"weight\class_yolo_epoch25.pt", help='Путь до модели классификатора (YOLO)')
     p.add_argument('--class_is_yolo', required=True, help='True or False')
-    p.add_argument('--iou', type=float, default=0.3, help='IOU для предсказаний YOLO (default 0.3)')
+    p.add_argument('--iou', type=float, default=0.1, help='IOU для предсказаний YOLO (default 0.3)')
+    p.add_argument('--conf_inverted', type=float, default=0.9, help='0.0-1.0')    
+
     return p.parse_args()
 
 
-def detect_temperature_single(image_path: Path, yolo_detect_model: YOLO, class_model: ResNetPredictor, yolo_class_model, yolo_class_flag: bool ,iou: float=0.3):
+def rotate_image(image, class_pred):
+    image = ImageOps.exif_transpose(image)
+    if class_pred == 1:
+        image = image.rotate(-180)
+    return image
+
+
+def detect_temperature_single(image_path: Path, yolo_detect_model: YOLO, class_model: ResNetPredictor, yolo_class_model, yolo_class_flag: bool ,iou: float=0.3, conf_inverted: int=0.5):
     """
     - применяет классификатор для поворота
     - запускает детекцию
@@ -41,7 +50,9 @@ def detect_temperature_single(image_path: Path, yolo_detect_model: YOLO, class_m
         else:
             results = yolo_class_model(str(image_path), verbose=False)
             class_pred = results[0].probs.top1  # 0 или 1
-            if class_pred == 0:
+            conf = results[0].probs.data
+            print(conf)          
+            if class_pred == 0 and conf[0] >= conf_inverted:
                 class_pred = 1
             else:
                 class_pred = 0
@@ -50,9 +61,7 @@ def detect_temperature_single(image_path: Path, yolo_detect_model: YOLO, class_m
         class_pred = None
 
     image = Image.open(image_path)
-    image = ImageOps.exif_transpose(image)
-    if class_pred == 1:
-        image = image.rotate(-180)
+    image = rotate_image(image, class_pred)
 
     results = yolo_detect_model.predict(image, iou=iou)
     if len(results) == 0:
@@ -127,6 +136,7 @@ def main():
     class_resnet_path = args.resnet_class_model
     yolo_class_path = args.yolo_class_model
     class_is_yolo = args.class_is_yolo
+    conf_inverted = args.conf_inverted
 
     if not indir.exists():
         print("indir не существует:", indir)
@@ -156,8 +166,7 @@ def main():
 
         print(f"-> {img_path} ...", end=' ')
         try:
-            temp, detections, annotated_np = detect_temperature_single(img_path, yolo_model, class_model, yolo_class_model, class_is_yolo, iou=args.iou)
-
+            temp, detections, annotated_np = detect_temperature_single(img_path, yolo_model, class_model, yolo_class_model, class_is_yolo, iou=args.iou, conf_inverted=conf_inverted)
             try:
                 annotated_img = Image.fromarray(annotated_np)
                 annotated_img.save(out_img_path)
