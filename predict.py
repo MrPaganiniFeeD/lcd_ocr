@@ -20,9 +20,9 @@ def parse_args():
     p = argparse.ArgumentParser(description="Batch detect + save annotated images and results")
     p.add_argument('--indir', required=True, help='Папка с изображениями (будут обработаны рекурсивно)')
     p.add_argument('--outdir', required=True, help='Папка для сохранения разметки и результатов')
-    p.add_argument('--yolo', default=r"weight\super_big\epoch20.pt", help='Путь до .pt модели YOLO (Ultralytics)')
+    p.add_argument('--yolo', default=r"weight\super_big\last_yolo_epoch20.pt", help='Путь до .pt модели YOLO (Ultralytics)')
     p.add_argument('--class_resnet', dest='resnet_class_model', default=r"weight\best_lcd_resnet183.pth", help='Путь до модели классификатора (ResNetPredictor)')
-    p.add_argument('--class_yolo', dest='yolo_class_model', default=r"weight\class_yolo_epoch25.pt", help='Путь до модели классификатора (YOLO)')
+    p.add_argument('--class_yolo', dest='yolo_class_model', default=r"weight\class_super_big\big_epoch15.pt", help='Путь до модели классификатора (YOLO)')
     p.add_argument('--class_is_yolo', required=True, help='True or False')
     p.add_argument('--iou', type=float, default=0.1, help='IOU для предсказаний YOLO (default 0.3)')
     p.add_argument('--conf_inverted', type=float, default=0.9, help='0.0-1.0')    
@@ -50,9 +50,9 @@ def detect_temperature_single(image_path: Path, yolo_detect_model: YOLO, class_m
         else:
             results = yolo_class_model(str(image_path), verbose=False)
             class_pred = results[0].probs.top1  # 0 или 1
-            conf = results[0].probs.data
-            print(conf)          
-            if class_pred == 0 and conf[0] >= conf_inverted:
+            conf = results[0].probs.data  
+            print(conf)   
+            if class_pred == 1 and conf[1] >= conf_inverted:
                 class_pred = 1
             else:
                 class_pred = 0
@@ -61,8 +61,53 @@ def detect_temperature_single(image_path: Path, yolo_detect_model: YOLO, class_m
         class_pred = None
 
     image = Image.open(image_path)
-    image = rotate_image(image, class_pred)
+    #image = rotate_image(image, class_pred)
+    img_array = np.array(image)
+    height_image = img_array.shape[0]
 
+    centers_and_names, out_detection, result = detect_numbers(yolo_detect_model, image, iou)
+    out_value_str = ''
+    is_node = False
+
+    for center_x, center_y, name in centers_and_names:
+        if (name == 'dot' and (center_y < height_image/2)) or (name == 'c' and (center_y < height_image/2)):
+            image = rotate_image(image, 1)
+            print("Изображение перевёрнуто")
+            centers_and_names, out_detection, result = detect_numbers(yolo_detect_model, image, iou)
+            break
+
+    for center_x, center_y, name in centers_and_names:
+        if name == 'dot' and is_node:
+            continue
+        if name == 'c':
+            continue
+        if name == 'dot' and not is_node:
+            is_node = True
+            out_value_str += "."
+            continue
+
+        out_value_str += name
+        
+
+    out_value = None
+    try:
+        if out_value_str != '':
+            out_value = float(out_value_str)
+
+    except ValueError:
+        out_value = None
+
+    try:
+        annotated = result.plot()  # numpy array (H,W,3)
+    except Exception:
+        annotated = np.array(image)
+
+    if (out_value != None) and (out_value > 30):
+        out_value = None
+
+    return out_value, out_detection, annotated
+
+def detect_numbers(yolo_detect_model, image, iou):
     results = yolo_detect_model.predict(image, iou=iou)
     if len(results) == 0:
         return None, [], np.array(image)
@@ -88,40 +133,10 @@ def detect_temperature_single(image_path: Path, yolo_detect_model: YOLO, class_m
     centers_and_names = []
     for d in out_detection:
         x1, y1, x2, y2 = d['bbox']
-        centers_and_names.append(((x1 + x2) / 2, d['class_name']))
+        centers_and_names.append(((x1 + x2) / 2, (y1 + y2) / 2, d['class_name']))
 
     centers_and_names.sort(key=lambda x: x[0])
-    out_value_str = ''
-    is_node = False
-    for center, name in centers_and_names:
-        if name == 'dot' and is_node:
-            continue
-        if name == 'c':
-            continue
-        if name == 'dot' and not is_node:
-            is_node = True
-            out_value_str += "."
-            continue
-        out_value_str += name
-        
-
-    out_value = None
-    try:
-        if out_value_str != '':
-            out_value = float(out_value_str)
-
-    except ValueError:
-        out_value = None
-
-    try:
-        annotated = result.plot()  # numpy array (H,W,3)
-    except Exception:
-        annotated = np.array(image)
-
-    if (out_value != None) and (out_value > 30):
-        out_value = None
-
-    return out_value, out_detection, annotated
+    return centers_and_names, out_detection, result
 
 
 def ensure_dir(p: Path):
