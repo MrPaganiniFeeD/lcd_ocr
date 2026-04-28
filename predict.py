@@ -19,9 +19,8 @@ def get_image_paths(indir: Path) -> List[Path]:
 def parse_args():
     p = argparse.ArgumentParser(description="Batch detect + save annotated images and results")
     p.add_argument('--indir', default=r"C:\Users\Егор\Downloads\Telegram Desktop\2804\2804", help='Папка с изображениями (будут обработаны рекурсивно)')
-    p.add_argument('--outdir', default=r"C:\Users\Egor\VsCode project\lcd_display\data\2804", help='Папка для сохранения разметки и результатов')
+    p.add_argument('--outdir', default=r"C:\Users\Egor\VsCode project\lcd_display\data\2804_test", help='Папка для сохранения разметки и результатов')
     p.add_argument('--yolo', default=r"weight\super_big\last_yolo_epoch20.pt", help='Путь до .pt модели YOLO (Ultralytics)')
-    p.add_argument('--class_resnet', dest='resnet_class_model', default=None, help='Путь до модели классификатора (ResNetPredictor)')
     p.add_argument('--class_yolo', dest='yolo_class_model', default=r"C:\Users\Егор\Downloads\yolo_lcd_08_02_26_epoch20.pt", help='Путь до модели классификатора (YOLO)')
     p.add_argument('--class_is_yolo', default=False, help='True or False')
     p.add_argument('--iou', type=float, default=0.1, help='IOU для предсказаний YOLO (default 0.3)')
@@ -37,7 +36,7 @@ def rotate_image(image, class_pred):
     return image
 
 
-def detect_temperature_single(image_path: Path, yolo_detect_model: YOLO, class_model: ResNetPredictor, yolo_class_model, yolo_class_flag: bool ,iou: float=0.3, conf_inverted: int=0.5):
+def detect_temperature_single(image_path: Path, yolo_detect_model: YOLO, yolo_class_model, yolo_class_flag: bool ,iou: float=0.3, conf_inverted: int=0.5):
     """
     - применяет классификатор для поворота
     - запускает детекцию
@@ -64,13 +63,14 @@ def detect_temperature_single(image_path: Path, yolo_detect_model: YOLO, class_m
     #image = rotate_image(image, class_pred)
     img_array = np.array(image)
     height_image = img_array.shape[0]
+    width_image = img_array.shape[1]
 
     centers_and_names, out_detection, result = detect_numbers(yolo_detect_model, image, iou)
     out_value_str = ''
     is_node = False
 
     for center_x, center_y, name in centers_and_names:
-        if (name == 'dot' and (center_y < height_image/2)):
+        if (name == 'dot' and (center_y < height_image/2)) or (name == 'c' and (center_x < width_image/2)):
             image = rotate_image(image, 1)
             print("Изображение перевёрнуто")
             centers_and_names, out_detection, result = detect_numbers(yolo_detect_model, image, iou)
@@ -148,7 +148,6 @@ def main():
     indir = Path(args.indir)
     outdir = Path(args.outdir)
     yolo_path = args.yolo
-    class_resnet_path = args.resnet_class_model
     yolo_class_path = args.yolo_class_model
     class_is_yolo = args.class_is_yolo
     conf_inverted = args.conf_inverted
@@ -165,7 +164,6 @@ def main():
 
     print("Загружаем модели...")
     yolo_model = YOLO(yolo_path)
-    class_model = None
     yolo_class_model = YOLO(yolo_class_path)
 
     csv_path = outdir / 'results.csv'
@@ -181,7 +179,7 @@ def main():
 
         print(f"-> {img_path} ...", end=' ')
         try:
-            temp, detections, annotated_np = detect_temperature_single(img_path, yolo_model, class_model, yolo_class_model, class_is_yolo, iou=args.iou, conf_inverted=conf_inverted)
+            temp, detections, annotated_np = detect_temperature_single(img_path, yolo_model, yolo_class_model, class_is_yolo, iou=args.iou, conf_inverted=conf_inverted)
             try:
                 annotated_img = Image.fromarray(annotated_np)
                 annotated_img.save(out_img_path)
