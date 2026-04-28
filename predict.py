@@ -18,14 +18,14 @@ def get_image_paths(indir: Path) -> List[Path]:
 
 def parse_args():
     p = argparse.ArgumentParser(description="Batch detect + save annotated images and results")
-    p.add_argument('--indir', required=True, help='Папка с изображениями (будут обработаны рекурсивно)')
-    p.add_argument('--outdir', required=True, help='Папка для сохранения разметки и результатов')
+    p.add_argument('--indir', default=r"C:\Users\Егор\Downloads\Telegram Desktop\2804\2804", help='Папка с изображениями (будут обработаны рекурсивно)')
+    p.add_argument('--outdir', default=r"C:\Users\Egor\VsCode project\lcd_display\data\2804", help='Папка для сохранения разметки и результатов')
     p.add_argument('--yolo', default=r"weight\super_big\last_yolo_epoch20.pt", help='Путь до .pt модели YOLO (Ultralytics)')
-    p.add_argument('--class_resnet', dest='resnet_class_model', default=r"weight\best_lcd_resnet183.pth", help='Путь до модели классификатора (ResNetPredictor)')
-    p.add_argument('--class_yolo', dest='yolo_class_model', default=r"weight\class_super_big\big_epoch15.pt", help='Путь до модели классификатора (YOLO)')
-    p.add_argument('--class_is_yolo', required=True, help='True or False')
+    p.add_argument('--class_resnet', dest='resnet_class_model', default=None, help='Путь до модели классификатора (ResNetPredictor)')
+    p.add_argument('--class_yolo', dest='yolo_class_model', default=r"C:\Users\Егор\Downloads\yolo_lcd_08_02_26_epoch20.pt", help='Путь до модели классификатора (YOLO)')
+    p.add_argument('--class_is_yolo', default=False, help='True or False')
     p.add_argument('--iou', type=float, default=0.1, help='IOU для предсказаний YOLO (default 0.3)')
-    p.add_argument('--conf_inverted', type=float, default=0.9, help='0.0-1.0')    
+    p.add_argument('--conf_inverted', type=float, default=0.9, help='0.0-1.0')
 
     return p.parse_args()
 
@@ -70,7 +70,7 @@ def detect_temperature_single(image_path: Path, yolo_detect_model: YOLO, class_m
     is_node = False
 
     for center_x, center_y, name in centers_and_names:
-        if (name == 'dot' and (center_y < height_image/2)) or (name == 'c' and (center_y < height_image/2)):
+        if (name == 'dot' and (center_y < height_image/2)):
             image = rotate_image(image, 1)
             print("Изображение перевёрнуто")
             centers_and_names, out_detection, result = detect_numbers(yolo_detect_model, image, iou)
@@ -165,7 +165,7 @@ def main():
 
     print("Загружаем модели...")
     yolo_model = YOLO(yolo_path)
-    class_model = ResNetPredictor(class_resnet_path)
+    class_model = None
     yolo_class_model = YOLO(yolo_class_path)
 
     csv_path = outdir / 'results.csv'
